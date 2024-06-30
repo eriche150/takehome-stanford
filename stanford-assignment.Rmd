@@ -1,0 +1,298 @@
+---
+title: "stanford-assignment"
+output: html_notebook
+---
+
+```{r import packages and datasets}
+#Import packages
+library(tidyverse)
+
+#Import dataset from wd
+person_1000 <- read.csv("~/Documents/Stanford_Bioinformatics/Coding_challenge_dataset/person_1000.csv")
+concept_1000 <- read.csv("~/Documents/Stanford_Bioinformatics/Coding_challenge_dataset/concept_1000.csv")
+death_1000 <- read.csv("~/Documents/Stanford_Bioinformatics/Coding_challenge_dataset/death_1000.csv")
+location_1000 <- read.csv("~/Documents/Stanford_Bioinformatics/Coding_challenge_dataset/location_1000.csv")
+condition_occurrence_1000 <- read.csv("~/Documents/Stanford_Bioinformatics/Coding_challenge_dataset/condition_occurrence_1000.csv")
+drug_exposure_1000 <- read.csv("~/Documents/Stanford_Bioinformatics/Coding_challenge_dataset/drug_exposure_1000.csv")
+```
+
+a. Which variables in the person table have missing values? What number and proportion of those variables are missing?
+```{r person_1000 wrangle}
+#Check for values with NA
+person_1000 %>%
+  summarise_all(~sum(is.na(.))) %>%
+        gather(parameters, missing_values) %>% #create new columns to store the missing values for each parameter
+        filter(missing_values > 0) %>% #only show parameters with missing values
+        mutate(proportion_missing = missing_values/nrow(person_1000)) #proportion calc. 
+
+```
+b. Which variables in the person table have suspicious-looking values? (Choose 3 suspicious values to list, and explain why they are not what you expect).
+- The following variables share a value of one for all patients within the person table: ‘month_of_birth’, ‘day_of_birth’. This implies all patients were born together on the same date --  the first of January. This statistically improbable finding suggests further review of data sourcing. 
+- The only value for ‘race_concept_id’ was 8527, denoting ‘White’ race for patients. Although uniformity in patient demographic such as healthy, white volunteers are present in practice, this is typically observed in Phase I trials with a small sample size, n = 10 - 30. With a database amassing one-thousand individual patient records, we usually expect a more diverse pool. 
+```{r unique_values}
+#check +/- suspicious values in year_of_birth variable by identifying if there are any values that are not within the expected range of ~1900-2024
+range(person_1000$year_of_birth) 
+#1909 - 1983
+range(person_1000$month_of_birth)
+#1 1 
+range(person_1000$day_of_birth)
+#1 1
+#identify if patients recruited for study were from diverse racial backgrounds
+unique(person_1000$race_concept_id)
+#8527; signifes White
+unique(person_1000$ethnicity_concept_id)
+#38003564; signifies non-Hispanic
+```
+
+a. What is the concept ID for Congestive Heart Failure?
+- 319835
+b. What clinical concept is represented by the concept ID of 8507?
+- Sex of the patient - male. 
+```{r CHF}
+chf_observations <- concept_1000 %>%
+  filter(grepl("congestive.*heart failure|heart failure.*congestive", concept_name, ignore.case = TRUE))
+print(chf_observations)
+
+```
+
+a. How many patients are there for each year included in the dataset?
+```{r}
+#Construct a table from person_1000 outlining the count of patients for each value under "year_of_birth"
+q3a<-person_1000 %>%
+  count(year_of_birth)
+q3a
+
+```
+
+b. What are the distributions of patients by race, ethnicity, and gender?
+```{r}
+r_person_1000 <- person_1000 %>% 
+        group_by(race_concept_id) %>%
+        summarise(count=n()) %>% #creates a new column, 'count', to store the number of patients that corresponds to each unique value of race_concept_id
+        mutate(proportion=count/sum(count))
+print(r_person_1000)
+
+e_person_1000 <- person_1000 %>%
+        group_by(ethnicity_concept_id) %>%
+        summarise(count=n()) %>%
+        mutate(proportion=count/sum(count))
+print(e_person_1000)
+
+g_person_1000 <- person_1000 %>%
+        group_by(gender_concept_id) %>%
+        summarise(count=n()) %>%
+        mutate(proportion=count/sum(count))
+print(g_person_1000)
+
+```
+
+c. What is the distribution of patients by year of birth and month of birth?
+```{r}
+yob_person_1000 <- person_1000 %>% 
+        group_by(year_of_birth) %>%
+        summarise(count=n()) %>%
+        mutate(percent=((count/sum(count)*100)))
+#print(yob_person_1000)
+#Verify wrangle was correct by ensuring the sum of the percentages is 100
+#yob_check <-c(yob_person_1000$percent)
+#sum(yob_check)
+
+#Plot the distribution of patients by year of birth
+ggplot(yob_person_1000, aes(x = factor(year_of_birth), y = count)) +
+  geom_bar(stat = "identity") +
+  coord_flip() + #allows for horizontal bar graph
+        geom_text(aes(label = count), hjust = -0.1,size=2.5) +
+  labs(title = "Distribution of Patients by Year of Birth",
+       x = "Year of Birth",
+       y = "Number of Patients") +
+  theme_minimal() +
+        scale_y_continuous(breaks = seq(0,70,by=10))
+#Month of Birth
+mob_person_1000 <- person_1000 %>%
+        group_by(month_of_birth) %>%
+        summarise(count=n()) %>%
+        mutate(percent=((count/sum(count)*100)))
+print(mob_person_1000)
+
+#mob_check <-c(mob_person_1000$percent)
+#sum(mob_check)
+
+```
+
+d. What is the distribution of patients in different states? Which states have the most patients? And the least?
+- Texas has the highest number of pt. (n=243) and Washington D.C has the lowest number of pt. (n=1)
+```{r location_1000 wrangle}
+state_location_1000 <- location_1000 %>% 
+        group_by(state) %>%
+        summarise(count=n()) %>%
+        mutate(percent=((count/sum(count)*100))) %>% 
+        arrange(desc(count))
+print(state_location_1000)
+
+#Plot the distribution of patients by state
+ggplot(state_location_1000, aes(x = reorder(state, count), y = count)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+        geom_text(aes(label = count), hjust = -0.1,size=2.5) +
+  labs(title = "Distribution of Patients by State",
+       x = "State",
+       y = "Number of Patients") +
+  theme_minimal() +
+        theme(axis.text.y = element_text(size = 6))
+
+
+```
+
+e. How many of these patients have death data? Which state had the most deaths? Are there any states that saw no deaths?
+- There are thirty-five patients for which death data is available, per number of observations in death_1000.csv 
+- Within this subset, each patient passed away in a different location; all states provided below contain only one record of patient death: "NY" "RI" "NY" "TX" "CA" "AZ" "OR" "IA" "CT" "CT" "FL" "VA" "NJ" "CA" "AR" "FL" "MO" "OH" "ND" "NJ" "FL" "FL" "VA" "LA" "IA" "PA" "SC" "PA" "VA" "IL" "KY" "NY" "IN" "WA" "MN"
+- The following states did not contain any deaths: "GA" "KS" "NC" "TN" "54" "NE" "MI" "MS" "OK" "WI" "AL" "SD" "CO" "MT" "WV" "ID" "NM" "UT" "AK" "MD" "WY" "NH" "ME" "NV" "MA" "VT" "HI" "DE" "DC"
+```{r}
+#Only a select number of patients have death data, use person_id to join; want location_id for state name
+death_states <- person_1000 %>%
+        filter(person_id %in% death_1000$person_id) %>%
+        group_by(location_id) %>%
+        summarise(count=n())
+#print(death_states)
+
+#Join the death_states dataset with the location_1000 dataset to obtain the state names
+death_states_0 <- death_states %>%
+        left_join(location_1000, by = c("location_id" = "location_id")) %>%
+        select(state, count)
+print(death_states_0)
+
+#Determine states that did not contain any deaths
+dead_states <- c(death_states_0$state) #vector of states that had deaths
+all_states <- c(state_location_1000$state) #vector of all states
+no_death_states <- setdiff(all_states, dead_states) #states that did not have any deaths
+print(no_death_states)
+
+```
+f. Which year saw the most deaths? 
+- 2009 observed the most deaths
+```{r}
+df_2009death <- death_1000 %>%
+        group_by(death_DATE) %>%
+        summarise(count=n()) %>%
+        arrange(desc(count))
+print(df_2009death)
+```
+
+
+a. What are the 5 most prevalent conditions in this dataset?
+- T2DM, afib, chest pain, anemia, pure hypercholesterolemia
+```{r condition_occurrence_1000 wrangle}
+indication_df <- condition_occurrence_1000 %>%
+        group_by(condition_concept_id) %>% #x-digit code for the condition
+        summarise(count=n()) %>%
+        arrange(desc(count))
+#print(indication_df)
+
+#Join the indication_df with concept_1000 to obtain the condition names
+indication_df0 <- indication_df %>%
+        left_join(concept_1000, by = c("condition_concept_id" = "concept_id")) %>% 
+        select(concept_name,count)
+indication_df0
+
+```
+b. Which condition was most prevalent in 2010?
+- T2DM
+```{r}
+#Filter for obs. in 2010 only 
+condition_2010 <- condition_occurrence_1000 %>%
+        filter(condition_start_DATE >= "2010-01-01" & condition_start_DATE <= "2010-12-31") %>%
+        group_by(condition_concept_id) %>%
+        summarise(count=n()) %>%
+        arrange(desc(count))
+#Join the condition_2010 with concept_1000 to obtain the condition names
+condition_2010x <- condition_2010 %>%
+        left_join(concept_1000, by = c("condition_concept_id" = "concept_id")) %>% 
+        select(concept_name,count)
+condition_2010x
+```
+c. What was the most prevalent condition in CA (looking across all years)?
+- T2DM
+```{r}
+#Filter for patients from location_1000 to obtain location_id's specific for California
+dfca1 <- location_1000 %>%
+        filter(state == "CA") %>%
+        select(location_id,state) %>% 
+        distinct()
+ca_id <- dfca1$location_id #Out of >3k location_id's, sixty represent california 
+#Identify California-only pt. by searching for location_id's present from ca_id in person_1000
+dfca2 <- person_1000 %>% 
+        filter(location_id %in% ca_id) %>% #California-only pt. info
+        distinct()
+
+ca_ptinfo <- dfca2$person_id #person-id's for patients in California;86
+
+#Filter for the patient_ID's from condition_occurrence_1000
+dfca3 <- condition_occurrence_1000 %>%
+        inner_join(dfca2, by = "person_id") %>% 
+        select(condition_concept_id,person_id)
+dfca4 <- dfca3 %>%
+        group_by(condition_concept_id) %>%
+        summarise(count=n()) %>%
+        arrange(desc(count))
+#Join the dfca4 with concept_1000 to obtain the condition names
+dfca5 <- dfca4 %>%
+        left_join(concept_1000, by = c("condition_concept_id" = "concept_id")) %>% 
+        select(concept_name,count)
+print(dfca5)
+
+```
+d. Which state had the highest incidence of Congestive Heart Failure across all years?
+- Florida
+```{r} 
+#Concept ID for CHF is 319835 
+#Merge the location_1000 dataset with the person_1000 dataset to obtain the State for each person_id
+person_location <- person_1000 %>%
+        left_join(location_1000, by = c("location_id" = "location_id")) %>%
+        select(person_id,state)
+#Merge person_location with condition_occurrence_1000 dataset but filtering when condition_concept_id == 319835
+chf_states <- condition_occurrence_1000 %>%
+        filter(condition_concept_id == 319835) %>%
+        inner_join(person_location, by = "person_id") %>%
+        group_by(state) %>%
+        summarise(count=n()) %>%
+        arrange(desc(count))
+print(chf_states)
+```
+
+a. What are the 5 most commonly used drugs?
+- Epoetin Alfa,Influenza virus vaccine, paricalcitrol, oxygen 99% gas, omeprazole 20mg
+- Of note, the number one result returned a drug_concept_id of 0, with a count of 1467. 
+
+```{r}
+df_de <- drug_exposure_1000 %>%
+        group_by(drug_concept_id) %>%
+        summarise(count=n()) %>%
+        arrange(desc(count)) %>%
+        left_join(concept_1000, by = c("drug_concept_id" = "concept_id")) %>%
+        select(concept_name,count)
+head(df_de)
+
+```
+b. What is the average number of drugs per person?
+- 68 drugs per person
+```{r}
+#Group the drug_exposure_1000 dataset by person_id and count the number of drugs each person has taken
+drug_per_person <- drug_exposure_1000 %>%
+        group_by(person_id) %>%
+        summarise(count=n())
+summary(drug_per_person)
+#Calculate the average number of drugs per person
+```
+
+c. What is the average duration that the Simvastatin 40 mg oral tablet is taken for?
+- 41 days
+```{r}
+#Filter the drug_exposure_1000 dataset for the drug_concept_id for Simvastatin 40 mg oral tablet, where drug_concept_ID == 1539407 | 1539406
+simvastatin <- drug_exposure_1000 %>%
+        filter(drug_concept_id == 1539407 | drug_concept_id == 1539406) %>% 
+        select(drug_exposure_id, person_id, drug_concept_id, drug_exposure_start_DATE, drug_exposure_end_DATE) %>%
+        mutate(duration = as.numeric(difftime(drug_exposure_end_DATE, drug_exposure_start_DATE, units = "days")))
+mean(simvastatin$duration, na.rm = TRUE)
+
+```
+
